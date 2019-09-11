@@ -49,6 +49,7 @@ srcs-y += mutex.c
 srcs-$(CFG_LOCKDEP) += mutex_lockdep.c
 srcs-y += wait_queue.c
 srcs-$(CFG_PM_STUBS) += pm_stubs.c
+srcs-$(CFG_WITH_SECURE_PARTITION) += secure_partition.c
 
 srcs-y += boot.c
 srcs-$(CFG_ARM32_core) += entry_a32.S
