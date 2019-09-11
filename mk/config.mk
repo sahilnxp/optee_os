@@ -511,3 +511,12 @@ CFG_CORE_HUK_SUBKEY_COMPAT ?= y
 # Compress and encode conf.mk into the TEE core, and show the encoded string on
 # boot (with severity TRACE_INFO).
 CFG_SHOW_CONF_ON_BOOT ?= n
+
+ifneq ($(CFG_STMM_PATH),)
+$(call force,CFG_WITH_SECURE_PARTITION,y)
+else
+CFG_WITH_SECURE_PARTITION ?= n
+endif
+ifeq ($(CFG_WITH_SECURE_PARTITION),y)
+$(call force,CFG_ZLIB,y)
+endif
