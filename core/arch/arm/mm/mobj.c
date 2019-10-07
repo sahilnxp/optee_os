@@ -427,7 +427,7 @@ static void *mobj_seccpy_shm_get_va(struct mobj *mobj, size_t offs)
 {
 	struct mobj_seccpy_shm *m = to_mobj_seccpy_shm(mobj);
 
-	if (&m->utc->ctx != thread_get_tsd()->ctx)
+	if (&m->utc->uctx.ctx != thread_get_tsd()->ctx)
 		return NULL;
 
 	if (offs >= mobj->size)
@@ -447,8 +447,8 @@ static void mobj_seccpy_shm_free(struct mobj *mobj)
 {
 	struct mobj_seccpy_shm *m = to_mobj_seccpy_shm(mobj);
 
-	tee_pager_rem_uta_region(m->utc, m->va, mobj->size);
-	tee_mmu_rem_rwmem(m->utc, mobj, m->va);
+	tee_pager_rem_um_region(&m->utc->uctx, m->va, mobj->size);
+	tee_mmu_rem_rwmem(&m->utc->uctx, mobj, m->va);
 	fobj_put(m->fobj);
 	free(m);
 }
@@ -488,13 +488,13 @@ struct mobj *mobj_seccpy_shm_alloc(size_t size)
 	m->mobj.size = size;
 	m->mobj.ops = &mobj_seccpy_shm_ops;
 
-	if (tee_mmu_add_rwmem(utc, &m->mobj, &va) != TEE_SUCCESS)
+	if (tee_mmu_add_rwmem(&utc->uctx, &m->mobj, &va) != TEE_SUCCESS)
 		goto bad;
 
 	m->fobj = fobj_rw_paged_alloc(ROUNDUP(size, SMALL_PAGE_SIZE) /
 				      SMALL_PAGE_SIZE);
-	if (tee_pager_add_uta_area(utc, va, m->fobj,
-				   TEE_MATTR_PRW | TEE_MATTR_URW))
+	if (tee_pager_add_um_area(&utc->uctx, va, m->fobj,
+				  TEE_MATTR_PRW | TEE_MATTR_URW))
 		goto bad;
 
 	m->va = va;
@@ -502,7 +502,7 @@ struct mobj *mobj_seccpy_shm_alloc(size_t size)
 	return &m->mobj;
 bad:
 	if (va)
-		tee_mmu_rem_rwmem(utc, &m->mobj, va);
+		tee_mmu_rem_rwmem(&utc->uctx, &m->mobj, va);
 	fobj_put(m->fobj);
 	free(m);
 	return NULL;
