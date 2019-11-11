@@ -259,7 +259,7 @@ TEE_Result vm_map_pad(struct user_mode_ctx *uctx, vaddr_t *va, size_t len,
 	if (mobj_is_secure(mobj))
 		attr |= TEE_MATTR_SECURE;
 
-	reg->mobj = mobj;
+	reg->mobj = mobj_get(mobj);
 	reg->offset = offs;
 	reg->va = *va;
 	reg->size = ROUNDUP(len, SMALL_PAGE_SIZE);
@@ -302,6 +302,7 @@ TEE_Result vm_map_pad(struct user_mode_ctx *uctx, vaddr_t *va, size_t len,
 err_rem_reg:
 	TAILQ_REMOVE(&uctx->vm_info.regions, reg, link);
 err_free_reg:
+	mobj_put(reg->mobj);
 	free(reg);
 	return res;
 }
@@ -452,8 +453,7 @@ TEE_Result vm_set_prot(struct user_mode_ctx *uctx, vaddr_t va, size_t len,
 static void umap_remove_region(struct vm_info *vmi, struct vm_region *reg)
 {
 	TAILQ_REMOVE(&vmi->regions, reg, link);
-	if (reg->flags & VM_FLAG_EXCLUSIVE_MOBJ)
-		mobj_free(reg->mobj);
+	mobj_put(reg->mobj);
 	free(reg);
 }
 
