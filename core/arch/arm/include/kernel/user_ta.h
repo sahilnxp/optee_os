@@ -60,9 +60,6 @@ struct user_ta_ctx {
 	vaddr_t stack_ptr;
 	vaddr_t load_addr;
 	void *ta_time_offs;
-#if defined(CFG_WITH_VFP)
-	struct thread_user_vfp_state vfp;
-#endif
 	struct user_mode_ctx uctx;
 };
 
