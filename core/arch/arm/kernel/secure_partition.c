@@ -15,10 +15,6 @@
 
 #include "thread_private.h"
 
-#define STMM_EVENT_COMPLETE_64			0x84000060
-#define STMM_MEMORY_ATTRIBUTES_GET_64		0xC4000064
-#define STMM_MEMORY_ATTRIBUTES_SET_64		0xC4000065
-
 static const TEE_UUID stmm_uuid = PTA_STMM_UUID;
 
 static const unsigned int stmm_entry;
