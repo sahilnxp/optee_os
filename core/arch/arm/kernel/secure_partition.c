@@ -96,9 +96,9 @@ static TEE_Result alloc_and_map_sp_fobj(struct sec_part_ctx *spc, size_t sz,
 	if (!mobj)
 		return TEE_ERROR_OUT_OF_MEMORY;
 	res = vm_map(&spc->uctx, va, num_pgs * SMALL_PAGE_SIZE,
-		     prot, VM_FLAG_EXCLUSIVE_MOBJ, mobj, 0);
+		     prot, 0, mobj, 0);
 	if (res)
-		mobj_free(mobj);
+		mobj_put(mobj);
 
 	return res;
 }
