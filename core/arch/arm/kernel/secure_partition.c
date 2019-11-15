@@ -413,13 +413,13 @@ static void set_svc_retval(struct thread_svc_regs *regs, uint64_t ret_val)
 static bool stmm_handle_svc(struct thread_svc_regs *regs)
 {
 	switch (regs->x0) {
-	case STMM_GET_VERSION:
+	case SP_SVC_VERSION:
 		set_svc_retval(regs, SP_VERSION);
 		return true;
-	case STMM_EVENT_COMPLETE_64:
+	case SP_SVC_EVENT_COMPLETE_64:
 		return return_helper(false, 0, regs);
-	case STMM_MEMORY_ATTRIBUTES_GET_64:
-	case STMM_MEMORY_ATTRIBUTES_SET_64:
+	case SP_SVC_MEMORY_ATTRIBUTES_GET_64:
+	case SP_SVC_MEMORY_ATTRIBUTES_SET_64:
 	default:
 		EMSG("Undefined syscall 0x%"PRIx32, (uint32_t)regs->x0);
 		return return_helper(true, 0xbadfbadf, regs);
