@@ -419,6 +419,9 @@ static bool stmm_handle_svc(struct thread_svc_regs *regs)
 	case SP_SVC_EVENT_COMPLETE_64:
 		return return_helper(false, 0, regs);
 	case SP_SVC_MEMORY_ATTRIBUTES_GET_64:
+		set_svc_retval(regs,
+			       SP_MEM_ATTR_EXEC | SP_MEM_ATTR_ACCESS_RW);
+		return true;
 	case SP_SVC_MEMORY_ATTRIBUTES_SET_64:
 	default:
 		EMSG("Undefined syscall 0x%"PRIx32, (uint32_t)regs->x0);
