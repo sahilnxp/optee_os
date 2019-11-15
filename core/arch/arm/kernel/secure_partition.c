@@ -147,7 +147,6 @@ static TEE_Result load_stmm(struct sec_part_ctx *spc)
 	vaddr_t stack_addr = 0;
 	vaddr_t data_addr = 0;
 	vaddr_t heap_addr = 0;
-	vaddr_t rw_addr = 0;
 
 	res = alloc_and_map_sp_fobj(spc, stmm_stack_size,
 				    TEE_MATTR_URW | TEE_MATTR_PRW, &stack_addr);
@@ -196,7 +195,7 @@ static TEE_Result load_stmm(struct sec_part_ctx *spc)
 		.sp_stack_base = stack_addr,
 		.sp_heap_base = heap_addr,
 		.sp_shared_buf_base = sec_buf_addr,
-		.sp_image_size = rw_addr + stmm_image_size - data_addr,
+		.sp_image_size = stmm_image_size,
 		.sp_pcpu_stack_size = stmm_stack_size,
 		.sp_heap_size = stmm_heap_size,
 		.sp_shared_buf_size = stmm_sec_buf_size,
