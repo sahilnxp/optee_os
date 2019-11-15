@@ -154,6 +154,11 @@ static TEE_Result load_stmm(struct sec_part_ctx *spc)
 	if (res)
 		return res;
 
+	res = alloc_and_map_sp_fobj(spc, stmm_heap_size,
+				    TEE_MATTR_URW | TEE_MATTR_PRW, &heap_addr);
+	if (res)
+		return res;
+
 	res = alloc_and_map_sp_fobj(spc, stmm_image_uncompressed_size,
 				    TEE_MATTR_PRW, &data_addr);
 	if (res)
