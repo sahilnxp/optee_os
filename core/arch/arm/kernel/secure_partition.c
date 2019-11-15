@@ -396,9 +396,26 @@ static bool return_helper(bool panic, uint32_t panic_code,
 	return false;
 }
 
+#ifdef ARM32
+static void set_svc_retval(struct thread_svc_regs *regs, uint32_t ret_val)
+{
+	regs->r0 = ret_val;
+}
+#endif /*ARM32*/
+
+#ifdef ARM64
+static void set_svc_retval(struct thread_svc_regs *regs, uint64_t ret_val)
+{
+	regs->x0 = ret_val;
+}
+#endif /*ARM64*/
+
 static bool stmm_handle_svc(struct thread_svc_regs *regs)
 {
 	switch (regs->x0) {
+	case STMM_GET_VERSION:
+		set_svc_retval(regs, SP_VERSION);
+		return true;
 	case STMM_EVENT_COMPLETE_64:
 		return return_helper(false, 0, regs);
 	case STMM_MEMORY_ATTRIBUTES_GET_64:
