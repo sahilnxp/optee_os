@@ -51,6 +51,14 @@ err:
 	return NULL;
 }
 
+
+static void clear_vfp_state(struct sec_part_ctx *spc __maybe_unused)
+{
+#ifdef CFG_WITH_VFP
+	thread_user_clear_vfp(&spc->uctx.vfp);
+#endif
+}
+
 static TEE_Result sec_part_enter_user_mode(struct sec_part_ctx *spc)
 {
 	TEE_Result res = TEE_SUCCESS;
@@ -61,6 +69,8 @@ static TEE_Result sec_part_enter_user_mode(struct sec_part_ctx *spc)
 	exceptions = thread_mask_exceptions(THREAD_EXCP_ALL);
 	__thread_enter_user_mode(&spc->regs, &panicked, &panic_code);
 	thread_unmask_exceptions(exceptions);
+
+	clear_vfp_state(spc);
 
 	if (panicked) {
 		abort_print_current_ta();
