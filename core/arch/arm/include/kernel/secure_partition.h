@@ -13,11 +13,11 @@
 #include <types_ext.h>
 #include <util.h>
 
-#define SP_RET_SUCCESS	 0
+#define SP_RET_SUCCESS		0
 #define SP_RET_NOT_SUPPORTED	-1
 #define SP_RET_INVALID_PARAM	-2
 #define SP_RET_DENIED		-3
-#define SP_RET_NO_MEM		-4
+#define SP_RET_NO_MEM		-5
 
 /* Param header types */
 #define SP_PARAM_EP			UINT8_C(0x01)
