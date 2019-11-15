@@ -362,6 +362,34 @@ static void sec_part_ctx_destroy(struct tee_ta_ctx *ctx)
 	free(spc);
 }
 
+static int sp_svc_set_mem_attr(vaddr_t va, unsigned int nr_pages, uint32_t perm)
+{
+	TEE_Result res;
+	struct tee_ta_session *sess = NULL;
+	struct sec_part_ctx *spc = NULL;
+	uint32_t prot;
+
+	if (va == 0 || nr_pages == 0)
+		return SP_RET_INVALID_PARAM;
+
+	tee_ta_get_current_session(&sess);
+	if (res != TEE_SUCCESS)
+		return SP_RET_DENIED;
+
+	spc = to_sec_part_ctx(sess->ctx);
+
+	prot = 0;
+	if ((perm & SP_MEM_ATTR_ACCESS_MASK) == SP_MEM_ATTR_ACCESS_RW)
+		prot |= TEE_MATTR_URW | TEE_MATTR_PRW;
+	else if ((perm & SP_MEM_ATTR_ACCESS_MASK) == SP_MEM_ATTR_ACCESS_RO)
+		prot |= TEE_MATTR_UR | TEE_MATTR_PR;
+	if ((perm & SP_MEM_ATTR_EXEC_MASK) == SP_MEM_ATTR_EXEC)
+		prot |= TEE_MATTR_UX;
+
+	res = vm_set_prot(&spc->uctx, va, nr_pages * SMALL_PAGE_SIZE, prot);
+	return res == TEE_SUCCESS ? SP_RET_SUCCESS : SP_RET_DENIED;
+}
+
 static bool return_helper(bool panic, uint32_t panic_code,
 			  struct thread_svc_regs *svc_regs)
 {
@@ -423,6 +451,10 @@ static bool stmm_handle_svc(struct thread_svc_regs *regs)
 			       SP_MEM_ATTR_EXEC | SP_MEM_ATTR_ACCESS_RW);
 		return true;
 	case SP_SVC_MEMORY_ATTRIBUTES_SET_64:
+		set_svc_retval(regs,
+			       sp_svc_set_mem_attr(regs->x1, regs->x2,
+						   regs->x3));
+		return true;
 	default:
 		EMSG("Undefined syscall 0x%"PRIx32, (uint32_t)regs->x0);
 		return return_helper(true, 0xbadfbadf, regs);
