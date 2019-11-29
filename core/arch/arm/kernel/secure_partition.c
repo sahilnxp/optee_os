@@ -393,8 +393,11 @@ static int sp_svc_set_mem_attr(vaddr_t va, unsigned int nr_pages, uint32_t perm)
 		prot |= TEE_MATTR_URW | TEE_MATTR_PRW;
 	else if ((perm & SP_MEM_ATTR_ACCESS_MASK) == SP_MEM_ATTR_ACCESS_RO)
 		prot |= TEE_MATTR_UR | TEE_MATTR_PR;
-	if ((perm & SP_MEM_ATTR_EXEC_MASK) == SP_MEM_ATTR_EXEC)
+
+	if ((perm & SP_MEM_ATTR_EXEC_MASK) == SP_MEM_ATTR_EXEC) {
 		prot |= TEE_MATTR_UX;
+		prot &= ~(TEE_MATTR_UW | TEE_MATTR_PW);
+	}
 
 	res = vm_set_prot(&spc->uctx, va, nr_pages * SMALL_PAGE_SIZE, prot);
 	return res == TEE_SUCCESS ? SP_RET_SUCCESS : SP_RET_DENIED;
