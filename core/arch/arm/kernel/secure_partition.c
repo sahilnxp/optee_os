@@ -382,7 +382,7 @@ static int sp_svc_set_mem_attr(vaddr_t va, unsigned int nr_pages, uint32_t perm)
 	if (va == 0 || nr_pages == 0)
 		return SP_RET_INVALID_PARAM;
 
-	tee_ta_get_current_session(&sess);
+	res = tee_ta_get_current_session(&sess);
 	if (res != TEE_SUCCESS)
 		return SP_RET_DENIED;
 
