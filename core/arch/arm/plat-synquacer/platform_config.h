@@ -23,6 +23,10 @@
 #define IT_SEC_TIMER			29
 #define TIMER_PERIOD_MS			2
 
+#define FLASH_REG_BASE			0x54800000
+#define FLASH_MEM_BASE			0x08000000
+#define FLASH_MEM_SIZE			0x00600000
+
 #define DRAM0_BASE			0x80000000
 
 /* Platform specific defines */
