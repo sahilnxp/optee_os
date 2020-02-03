@@ -137,6 +137,47 @@ static TEE_Result alloc_and_map_io(struct sec_part_ctx *spc, paddr_t pa,
 	return res;
 }
 
+#if defined(PLATFORM_FLAVOR_developerbox)
+static TEE_Result alloc_synquacer_io(struct sec_part_ctx *spc)
+{
+	TEE_Result res;
+	vaddr_t uart_va = 0;
+	vaddr_t reg_va = 0;
+	vaddr_t mem_va = 0;
+
+	res = alloc_and_map_io(spc, 0x2a400000, 0x00004000,
+			       TEE_MATTR_URW | TEE_MATTR_PRW,
+			       &uart_va, 0, 0);
+	if (res) {
+		EMSG("failed to alloc_and_map uart");
+		return res;
+	}
+	IMSG("uart va=%#"PRIxVA, uart_va);
+
+	res = alloc_and_map_io(spc, 0x54800000, 0x00004000,
+			       TEE_MATTR_URW | TEE_MATTR_PRW,
+			       &reg_va, 0, 0);
+	if (res) {
+		EMSG("failed to alloc_and_map flash register");
+		return res;
+	}
+	IMSG("flash reg va=%#"PRIxVA, reg_va);
+
+	res = alloc_and_map_io(spc, 0x08000000, 0x00600000,
+			       TEE_MATTR_URW | TEE_MATTR_PRW,
+			       &mem_va, 0, 0);
+	if (res) {
+		EMSG("failed to alloc_and_map flash memory");
+		return res;
+	}
+	IMSG("flash mem va=%#"PRIxVA, mem_va);
+
+	return TEE_SUCCESS;
+}
+#else
+#error "not developerbox"
+#endif
+
 static void *zalloc(void *opaque __unused, unsigned int items,
 		    unsigned int size)
 {
@@ -197,6 +238,11 @@ static TEE_Result load_stmm(struct sec_part_ctx *spc)
 				    &ns_comm_buf_addr);
 	if (res)
 		return res;
+
+#if defined(PLATFORM_FLAVOR_developerbox)
+	res = alloc_synquacer_io(spc);
+	assert (res == TEE_SUCCESS);
+#endif
 
 	image_addr = sp_addr;
 	heap_addr = image_addr +
