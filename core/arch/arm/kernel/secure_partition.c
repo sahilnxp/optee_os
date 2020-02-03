@@ -145,7 +145,7 @@ static TEE_Result alloc_synquacer_io(struct sec_part_ctx *spc)
 	vaddr_t reg_va = 0;
 	vaddr_t mem_va = 0;
 
-	res = alloc_and_map_io(spc, 0x2a400000, 0x00004000,
+	res = alloc_and_map_io(spc, 0x51040000, 0x00004000,
 			       TEE_MATTR_URW | TEE_MATTR_PRW,
 			       &uart_va, 0, 0);
 	if (res) {
