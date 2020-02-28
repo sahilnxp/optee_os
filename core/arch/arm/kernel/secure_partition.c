@@ -137,45 +137,27 @@ static TEE_Result alloc_and_map_io(struct sec_part_ctx *spc, paddr_t pa,
 	return res;
 }
 
-#if defined(PLATFORM_FLAVOR_developerbox)
-static TEE_Result alloc_synquacer_io(struct sec_part_ctx *spc)
+/* UEFI identify mapping hack. Since the EDK PL01 drivers doesn't remap
+ * anything, map the address here and copy it before compiling EDK2. This will
+ * allow StMM debug messages for initial development...
+ */
+#if defined (PLATFORM_FLAVOR_lx2160ardb)
+static TEE_Result alloc_nxp_io(struct sec_part_ctx *spc)
 {
 	TEE_Result res;
 	vaddr_t uart_va = 0;
-	vaddr_t reg_va = 0;
-	vaddr_t mem_va = 0;
 
-	res = alloc_and_map_io(spc, 0x51040000, 0x00004000,
+	res = alloc_and_map_io(spc, 0x021C0000, 0x00001000,
 			       TEE_MATTR_URW | TEE_MATTR_PRW,
 			       &uart_va, 0, 0);
 	if (res) {
 		EMSG("failed to alloc_and_map uart");
 		return res;
 	}
-	IMSG("uart va=%#"PRIxVA, uart_va);
-
-	res = alloc_and_map_io(spc, 0x54800000, 0x00004000,
-			       TEE_MATTR_URW | TEE_MATTR_PRW,
-			       &reg_va, 0, 0);
-	if (res) {
-		EMSG("failed to alloc_and_map flash register");
-		return res;
-	}
-	IMSG("flash reg va=%#"PRIxVA, reg_va);
-
-	res = alloc_and_map_io(spc, 0x08000000, 0x00600000,
-			       TEE_MATTR_URW | TEE_MATTR_PRW,
-			       &mem_va, 0, 0);
-	if (res) {
-		EMSG("failed to alloc_and_map flash memory");
-		return res;
-	}
-	IMSG("flash mem va=%#"PRIxVA, mem_va);
+	EMSG("uart va=%#"PRIxVA, uart_va);
 
 	return TEE_SUCCESS;
 }
-#else
-#error "not developerbox"
 #endif
 
 static void *zalloc(void *opaque __unused, unsigned int items,
@@ -239,8 +221,8 @@ static TEE_Result load_stmm(struct sec_part_ctx *spc)
 	if (res)
 		return res;
 
-#if defined(PLATFORM_FLAVOR_developerbox)
-	res = alloc_synquacer_io(spc);
+#if defined (PLATFORM_FLAVOR_lx2160ardb)
+	res = alloc_nxp_io(spc);
 	assert (res == TEE_SUCCESS);
 #endif
 
