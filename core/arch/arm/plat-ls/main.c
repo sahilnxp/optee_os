@@ -75,6 +75,7 @@ static struct pl011_data console_data;
 #else
 static struct ns16550_data console_data;
 #endif
+register_ddr(0x0b0000000, 0x050000000);
 
 register_phys_mem_pgdir(MEM_AREA_IO_NSEC, CONSOLE_UART_BASE,
 			CORE_MMU_PGDIR_SIZE);
