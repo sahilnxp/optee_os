@@ -18,6 +18,17 @@
 const struct tee_file_operations *tee_svc_storage_file_ops(uint32_t storage_id);
 
 /*
+ * Combined read/write ops from secure partition running StnadAloneMM
+ */
+TEE_Result sec_storage_obj_read(unsigned long storage_id, void *object_id,
+                                size_t object_id_len, void *data, size_t len,
+                                unsigned long flags);
+
+TEE_Result sec_storage_obj_write(unsigned long storage_id, void *object_id,
+                                 size_t object_id_len, void *data, size_t len,
+                                 size_t offset, unsigned long flags);
+
+/*
  * Persistant Object Functions
  */
 TEE_Result syscall_storage_obj_open(unsigned long storage_id, void *object_id,

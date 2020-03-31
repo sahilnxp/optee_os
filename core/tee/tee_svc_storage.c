@@ -6,6 +6,7 @@
 #include <kernel/mutex.h>
 #include <kernel/tee_misc.h>
 #include <kernel/tee_ta_manager.h>
+#include <kernel/secure_partition.h>
 #include <mm/tee_mmu.h>
 #include <string.h>
 #include <tee_api_defines_extensions.h>
@@ -392,6 +393,190 @@ static TEE_Result tee_svc_storage_init_file(struct tee_obj *o,
 		o->info.dataSize = len;
 exit:
 	free(attr);
+	return res;
+}
+
+/*
+ * Combined read from secure partition, this will open, read and
+ * close the fh
+ */
+TEE_Result sec_storage_obj_read(unsigned long storage_id, void *object_id,
+				size_t object_id_len, void *data, size_t len,
+				unsigned long flags)
+
+{
+	const struct tee_file_operations *fops =
+			tee_svc_storage_file_ops(storage_id);
+	struct tee_ta_session *sess = NULL;
+	TEE_Result res = TEE_ERROR_BAD_STATE;
+	struct tee_pobj *po = NULL;
+	size_t pos_tmp = 0;
+	/*
+	 * We don't need to add an object here on the list we'll create the file
+	 * and exit
+	 */
+	struct tee_obj o;
+	size_t bytes = 0;
+
+	memset(&o, 0, sizeof(o));
+	if (!fops)
+		return TEE_ERROR_ITEM_NOT_FOUND;
+
+	if (object_id_len > TEE_OBJECT_ID_MAX_LEN)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	res = tee_ta_get_current_session(&sess);
+	if (res != TEE_SUCCESS)
+		return res;
+
+	res = tee_pobj_get((void *)&sess->ctx->uuid, object_id,
+			   object_id_len, flags, false, fops, &po);
+	if (res != TEE_SUCCESS)
+		return res;
+
+	o.info.handleFlags =
+	    TEE_HANDLE_FLAG_PERSISTENT | TEE_HANDLE_FLAG_INITIALIZED |
+	    TEE_DATA_FLAG_ACCESS_READ;
+	o.flags = flags;
+	o.pobj = po;
+
+	res = tee_svc_storage_read_head(&o);
+	if (res != TEE_SUCCESS) {
+		if (res == TEE_ERROR_CORRUPT_OBJECT) {
+			EMSG("Object corrupt");
+			goto err;
+		}
+		goto err;
+	}
+
+	/* Always reading the full file */
+	if (ADD_OVERFLOW(0, len, &pos_tmp)) {
+		res = TEE_ERROR_OVERFLOW;
+		goto err;
+	}
+
+	/*
+	 * FIXME @Jens, we don't need that since we always control the
+	 * heap/stack of stmm right?
+	 */
+#if 0
+	res = tee_mmu_check_access_rights(&spc->uctx,
+					  TEE_MEMORY_ACCESS_WRITE |
+					  TEE_MEMORY_ACCESS_ANY_OWNER,
+					  (uaddr_t)data, len);
+	if (res != TEE_SUCCESS)
+		goto err;
+#endif
+
+	/*
+	 * Not needed but keep the check in case we want to read at an offset
+	 * and change '0' with the offset value
+	 */
+	if (ADD_OVERFLOW(o.ds_pos, 0, &pos_tmp)) {
+		res = TEE_ERROR_OVERFLOW;
+		goto err;
+	}
+
+	bytes = len;
+	res = o.pobj->fops->read(o.fh, pos_tmp, data, &bytes);
+	if (res != TEE_SUCCESS) {
+		if (res == TEE_ERROR_CORRUPT_OBJECT) {
+			EMSG("Object corrupt");
+			o.pobj->fops->remove(o.pobj);
+		}
+		goto err;
+	}
+	o.pobj->fops->close(&o.fh);
+
+	return res;
+
+err:
+	o.pobj->fops->close(&o.fh);
+	if (po)
+		tee_pobj_release(po);
+	if (res == TEE_ERROR_NO_DATA || res == TEE_ERROR_BAD_FORMAT)
+		res = TEE_ERROR_CORRUPT_OBJECT;
+
+	return res;
+}
+
+/*
+ * Combined write from secure partition, this will create/open, write and
+ * close the fh
+ */
+TEE_Result sec_storage_obj_write(unsigned long storage_id, void *object_id,
+				 size_t object_id_len, void *data, size_t len,
+				 size_t offset, unsigned long flags)
+
+{
+	const struct tee_file_operations *fops =
+			tee_svc_storage_file_ops(storage_id);
+	struct tee_ta_session *sess = NULL;
+	TEE_Result res = TEE_SUCCESS;
+	struct tee_pobj *po = NULL;
+	size_t pos_tmp = 0;
+	/*
+	 * We don't need to add an object here on the list we'll create the file
+	 * and exit
+	 */
+	struct tee_obj o;
+
+	memset(&o, 0, sizeof(o));
+	if (!fops)
+		return TEE_ERROR_ITEM_NOT_FOUND;
+
+	if (object_id_len > TEE_OBJECT_ID_MAX_LEN)
+		return TEE_ERROR_BAD_PARAMETERS;
+
+	res = tee_ta_get_current_session(&sess);
+	if (res != TEE_SUCCESS)
+		return res;
+
+	res = tee_pobj_get((void *)&sess->ctx->uuid, object_id,
+			   object_id_len, flags, false, fops, &po);
+	if (res != TEE_SUCCESS)
+		return res;
+
+	o.info.handleFlags =
+	    TEE_HANDLE_FLAG_PERSISTENT | TEE_HANDLE_FLAG_INITIALIZED |
+	    TEE_DATA_FLAG_ACCESS_WRITE;
+	o.flags = flags;
+	o.pobj = po;
+
+	res = tee_svc_storage_init_file(&o, NULL, NULL, 0);
+	if (res != TEE_SUCCESS)
+		return res;
+	/*
+	 * Guard o->info.dataPosition += bytes below from overflowing.
+	 * The driver is expected to send the overall offset in the file for
+	 * each write, so we can ignore dataPosition
+	 */
+	if (ADD_OVERFLOW(offset, len, &pos_tmp)) {
+		res = TEE_ERROR_OVERFLOW;
+		goto err;
+	}
+
+	if (ADD_OVERFLOW(o.ds_pos, offset, &pos_tmp)) {
+		res = TEE_ERROR_ACCESS_CONFLICT;
+		goto err;
+	}
+	/* FIXME remove after tests */
+	//pos_tmp += offset;
+
+	res = o.pobj->fops->write(o.fh, pos_tmp, data, len);
+	if (res != TEE_SUCCESS)
+		goto err;
+
+	o.pobj->fops->close(&o.fh);
+
+	return TEE_SUCCESS;
+
+err:
+	if (res == TEE_ERROR_NO_DATA || res == TEE_ERROR_BAD_FORMAT)
+		res = TEE_ERROR_CORRUPT_OBJECT;
+	if (po)
+		tee_pobj_release(po);
+
 	return res;
 }
 
