@@ -21,8 +21,8 @@
 static const TEE_UUID stmm_uuid = PTA_STMM_UUID;
 
 static const unsigned int stmm_entry;
-static const unsigned int stmm_stack_size = 128 * SMALL_PAGE_SIZE;
-static const unsigned int stmm_heap_size = 1024 * SMALL_PAGE_SIZE;
+static const unsigned int stmm_stack_size = 4 * SMALL_PAGE_SIZE;
+static const unsigned int stmm_heap_size = 398 * SMALL_PAGE_SIZE;
 static const unsigned int stmm_sec_buf_size = SMALL_PAGE_SIZE;
 static const unsigned int stmm_ns_comm_buf_size = SMALL_PAGE_SIZE;
 
@@ -129,13 +129,17 @@ static TEE_Result alloc_and_map_io(struct sec_part_ctx *spc, paddr_t pa,
 	sz = ROUNDUP(sz, SMALL_PAGE_SIZE);
 	mobj = mobj_phys_alloc(pa, sz, TEE_MATTR_CACHE_NONCACHE,
 			       CORE_MEM_TA_RAM);
-	if (!mobj)
+	if (!mobj) {
+		EMSG("mobj_phys_alloc failed\n");
 		return TEE_ERROR_OUT_OF_MEMORY;
+	}
 
 	res = vm_map_pad(&spc->uctx, va, sz, prot, 0, mobj, 0, pad_begin,
 			 pad_end);
-	if (res)
+	if (res) {
+		EMSG("vm_map_pad failed\n");
 		mobj_put(mobj);
+	}
 
 	return res;
 }
@@ -148,7 +152,7 @@ static TEE_Result alloc_and_map_io(struct sec_part_ctx *spc, paddr_t pa,
 static TEE_Result alloc_nxp_io(struct sec_part_ctx *spc)
 {
 	TEE_Result res;
-	vaddr_t uart_va = 0;
+	vaddr_t uart_va = 0, i2c5_va = 0;
 
 	res = alloc_and_map_io(spc, 0x021C0000, 0x00001000,
 			       TEE_MATTR_URW | TEE_MATTR_PRW,
@@ -157,7 +161,18 @@ static TEE_Result alloc_nxp_io(struct sec_part_ctx *spc)
 		EMSG("failed to alloc_and_map uart");
 		return res;
 	}
+
+	/* Map I2c5 */
+	res = alloc_and_map_io(spc, 0x02040000, 0x00001000,
+			       TEE_MATTR_URW | TEE_MATTR_PRW,
+			       &i2c5_va, 0, 0);
+	if (res) {
+		EMSG("failed to alloc_and_map i2c5");
+		return res;
+	}
+
 	EMSG("uart va=%#"PRIxVA, uart_va);
+	EMSG("i2c5 va=%#"PRIxVA, i2c5_va);
 
 	return TEE_SUCCESS;
 }
