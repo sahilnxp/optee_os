@@ -26,6 +26,11 @@
 struct mobj *mobj_sec_ddr;
 struct mobj *mobj_tee_ram;
 
+static TEE_Result dummy_map(struct mobj *mobj __unused)
+{
+	return TEE_SUCCESS;
+}
+
 /*
  * mobj_phys implementation
  */
@@ -121,6 +126,8 @@ static const struct mobj_ops mobj_phys_ops __rodata_unpaged = {
 	.get_cattr = mobj_phys_get_cattr,
 	.matches = mobj_phys_matches,
 	.free = mobj_phys_free,
+	.inc_map = dummy_map,
+	.dec_map = dummy_map,
 };
 
 static struct mobj_phys *to_mobj_phys(struct mobj *mobj)
@@ -203,6 +210,8 @@ static void *mobj_virt_get_va(struct mobj *mobj, size_t offset)
 
 static const struct mobj_ops mobj_virt_ops __rodata_unpaged = {
 	.get_va = mobj_virt_get_va,
+	.inc_map = dummy_map,
+	.dec_map = dummy_map,
 };
 
 static void mobj_virt_assert_type(struct mobj *mobj __maybe_unused)
@@ -276,6 +285,8 @@ static const struct mobj_ops mobj_mm_ops __rodata_unpaged = {
 	.get_cattr = mobj_mm_get_cattr,
 	.matches = mobj_mm_matches,
 	.free = mobj_mm_free,
+	.inc_map = dummy_map,
+	.dec_map = dummy_map,
 };
 
 static struct mobj_mm *to_mobj_mm(struct mobj *mobj)
@@ -386,6 +397,8 @@ static const struct mobj_ops mobj_shm_ops __rodata_unpaged = {
 	.matches = mobj_shm_matches,
 	.free = mobj_shm_free,
 	.get_cookie = mobj_shm_get_cookie,
+	.inc_map = dummy_map,
+	.dec_map = dummy_map,
 };
 
 static struct mobj_shm *to_mobj_shm(struct mobj *mobj)
@@ -474,6 +487,8 @@ static const struct mobj_ops mobj_seccpy_shm_ops __rodata_unpaged = {
 	.matches = mobj_seccpy_shm_matches,
 	.free = mobj_seccpy_shm_free,
 	.get_fobj = mobj_seccpy_shm_get_fobj,
+	.inc_map = dummy_map,
+	.dec_map = dummy_map,
 };
 
 static bool mobj_is_seccpy_shm(struct mobj *mobj)
@@ -630,6 +645,8 @@ static const struct mobj_ops mobj_with_fobj_ops __rodata_unpaged = {
 	.get_fobj = mobj_with_fobj_get_fobj,
 	.get_cattr = mobj_with_fobj_get_cattr,
 	.get_pa = mobj_with_fobj_get_pa,
+	.inc_map = dummy_map,
+	.dec_map = dummy_map,
 };
 
 #ifdef CFG_PAGED_USER_TA
