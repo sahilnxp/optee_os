@@ -68,6 +68,11 @@
 #define FFA_SVC_RPMB_READ		UINT32_C(0xC4000066)
 #define FFA_SVC_RPMB_WRITE		UINT32_C(0xC4000067)
 
+/*
+ * Put some comments here.
+ */
+#define FFA_SVC_MAP_I2C_ADDR		UINT32_C(0xC4000068)
+
 /* Param header types */
 #define SP_PARAM_EP			UINT8_C(0x01)
 #define SP_PARAM_IMAGE_BINARY		UINT8_C(0x02)

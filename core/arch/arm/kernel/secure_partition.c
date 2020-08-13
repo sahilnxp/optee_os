@@ -32,12 +32,14 @@ static const uint16_t stmm_id = 1U;
 static const uint16_t stmm_pta_id = 2U;
 static const uint16_t mem_mgr_id = 3U;
 static const uint16_t ffa_storage_id = 4U;
+static const uint16_t peripheral_mgr_id = 5U;
 
 static const unsigned int stmm_stack_size = 4 * SMALL_PAGE_SIZE;
 static const unsigned int stmm_heap_size = 398 * SMALL_PAGE_SIZE;
 static const unsigned int stmm_sec_buf_size = SMALL_PAGE_SIZE;
 static const unsigned int stmm_ns_comm_buf_size = SMALL_PAGE_SIZE;
 
+vaddr_t uart_va = 0, i2c5_va = 0;
 extern uint8_t stmm_image[];
 extern const unsigned int stmm_image_size;
 extern const unsigned int stmm_image_uncompressed_size;
@@ -130,6 +132,67 @@ static TEE_Result alloc_and_map_sp_fobj(struct sec_part_ctx *spc, size_t sz,
 	return res;
 }
 
+static TEE_Result alloc_and_map_io(struct sec_part_ctx *spc, paddr_t pa,
+				   size_t sz, uint32_t prot, vaddr_t *va, \
+				   size_t pad_begin, size_t pad_end)
+{
+	struct mobj *mobj;
+	TEE_Result res = TEE_SUCCESS;
+
+	sz = ROUNDUP(sz, SMALL_PAGE_SIZE);
+	mobj = mobj_phys_alloc(pa, sz, TEE_MATTR_CACHE_NONCACHE,
+			       CORE_MEM_TA_RAM);
+	if (!mobj) {
+		EMSG("***** OUT OF MEMORY ****\n");
+		return TEE_ERROR_OUT_OF_MEMORY;
+	}
+
+	res = vm_map_pad(&spc->uctx, va, sz, prot, 0, mobj, 0, pad_begin,
+			 pad_end);
+	if (res) {
+		EMSG("***** vm_map_pad failed ****\n");
+		mobj_put(mobj);
+	}
+
+	return res;
+}
+
+/* FIXME HACK. This does not belong here. EDK2 with patchable pcd's could send
+ * a specific SVC and map the console. The use the remapped address for printing
+ * This ideally has to be defined in the platform port files and have a callback
+ * here
+ */
+/* UEFI identify mapping. Since the EDK PL01 drivers doesn't remap
+ * anything, map the address here and copy it before compiling EDK2. This will
+ * allow StMM debug messages for initial development...
+ */
+static TEE_Result alloc_nxp_io(struct sec_part_ctx *spc)
+{
+ 	TEE_Result res;
+
+#if 1
+	res = alloc_and_map_io(spc, 0x021C0000, 0x00001000,
+ 			       TEE_MATTR_URW | TEE_MATTR_PRW,
+ 			       &uart_va, 0, 0);
+ 	if (res) {
+ 		EMSG("failed to alloc_and_map uart");
+ 		return res;
+ 	}
+	/* Map I2c5 */
+	res = alloc_and_map_io(spc, 0x02040000, 0x00001000,
+			       TEE_MATTR_URW | TEE_MATTR_PRW,
+			       &i2c5_va, 0, 0);
+	if (res) {
+		EMSG("failed to alloc_and_map i2c5");
+		return res;
+	}
+#endif
+	EMSG("uart va=%#"PRIxVA, uart_va);
+	EMSG("i2c5 va=%#"PRIxVA, i2c5_va);
+
+	return res;
+}
+
 static void *zalloc(void *opaque __unused, unsigned int items,
 		    unsigned int size)
 {
@@ -193,6 +256,9 @@ static TEE_Result load_stmm(struct sec_part_ctx *spc)
 				    &comm_buf_addr);
 	if (res)
 		return res;
+
+	res = alloc_nxp_io(spc);
+ 	assert (res == TEE_SUCCESS);
 
 	image_addr = sp_addr;
 	heap_addr = image_addr + uncompressed_size_roundup;
@@ -339,6 +405,8 @@ static TEE_Result stmm_enter_invoke_cmd(struct tee_ta_session *s,
 	if (param->types != exp_pt)
 		return TEE_ERROR_BAD_PARAMETERS;
 
+	EMSG("*********\n");
+
 	mem = &param->u[0].mem;
 	ns_buf_size = mem->size;
 	if (ns_buf_size > spc->ns_comm_buf_size)
@@ -347,6 +415,8 @@ static TEE_Result stmm_enter_invoke_cmd(struct tee_ta_session *s,
 	res = mobj_inc_map(mem->mobj);
 	if (res)
 		return res;
+
+	EMSG("*********\n");
 
 	va = mobj_get_va(mem->mobj, mem->offs);
 	if (!va) {
@@ -363,22 +433,32 @@ static TEE_Result stmm_enter_invoke_cmd(struct tee_ta_session *s,
 	spc->regs.x[6] = 0;
 	spc->regs.x[7] = 0;
 
+	EMSG("*********\n");
+
 	tee_ta_push_current_session(s);
 
 	memcpy((void *)spc->ns_comm_buf_addr, va, ns_buf_size);
 
+	EMSG("*********\n");
+
 	res = sec_part_enter_user_mode(spc);
 	if (res)
 		goto out;
+	EMSG("*********\n");
+
 	/*
 	 * Copy the SPM response from secure partition back to the non secure
 	 * the client that called us
 	 */
 	param->u[1].val.a = spc->regs.x[4];
 
+	EMSG("*********\n");
+
 	memcpy(va, (void *)spc->ns_comm_buf_addr, ns_buf_size);
 
 out:
+	EMSG("*********\n");
+
 	tmp_res = mobj_dec_map(mem->mobj);
 	assert(!tmp_res);
 	tee_ta_pop_current_session();
@@ -716,6 +796,39 @@ static bool stmm_handle_storage_service(struct thread_svc_regs *regs)
 	}
 }
 
+static bool stmm_handle_peripheral_service(struct thread_svc_regs *regs)
+{
+	uint32_t action = regs->x3;
+	TEE_Result res = TEE_SUCCESS;
+	uint16_t src_id = 0;
+	uint16_t dst_id = 0;
+
+	switch (action) {
+	case FFA_SVC_MAP_I2C_ADDR:
+
+        	/* extract from request */
+	        src_id = (regs->x1 >> 16) & UINT16_MAX;
+        	dst_id = regs->x1 & UINT16_MAX;
+
+	        /* compose message */
+        	regs->x0 = FFA_MSG_SEND_DIRECT_RESP_64;
+	        /* swap endpoint ids */
+       		regs->x1 = SHIFT_U32(dst_id, 16) | src_id;
+	        regs->x2 = FFA_PARAM_MBZ;
+        	regs->x3 = res;
+	        regs->x4 = i2c5_va;
+        	regs->x5 = 0;
+	        regs->x6 = 0;
+        	regs->x7 = 0;
+
+		return true;
+	default:
+		EMSG("Undefined service id 0x%"PRIx32, action);
+		service_compose_direct_resp(regs, SP_RET_INVALID_PARAM);
+		return true;
+	}
+}
+
 static bool spm_eret_error(int32_t error_code, struct thread_svc_regs *regs)
 {
 	regs->x0 = FFA_ERROR;
@@ -738,6 +851,8 @@ static bool spm_handle_direct_req(struct thread_svc_regs *regs)
 		return stmm_handle_mem_mgr_service(regs);
 	else if (dst_id == ffa_storage_id)
 		return stmm_handle_storage_service(regs);
+	else if (dst_id == peripheral_mgr_id)
+		return stmm_handle_peripheral_service(regs);
 
 	EMSG("Undefined endpoint id 0x%"PRIx16, dst_id);
 	return spm_eret_error(SP_RET_INVALID_PARAM, regs);
