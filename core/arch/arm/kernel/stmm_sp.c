@@ -181,6 +181,67 @@ static TEE_Result alloc_and_map_sp_fobj(struct stmm_ctx *spc, size_t sz,
 	return TEE_SUCCESS;
 }
 
+static TEE_Result alloc_and_map_io(struct stmm_ctx *spc, paddr_t pa,
+                                   size_t sz, uint32_t prot, vaddr_t *va, \
+                                   size_t pad_begin, size_t pad_end)
+{
+        struct mobj *mobj;
+        TEE_Result res = TEE_SUCCESS;
+
+        sz = ROUNDUP(sz, SMALL_PAGE_SIZE);
+        mobj = mobj_phys_alloc(pa, sz, TEE_MATTR_CACHE_NONCACHE,
+                               CORE_MEM_TA_RAM);
+        if (!mobj) {
+		EMSG("Out of memory\n");
+                return TEE_ERROR_OUT_OF_MEMORY;
+	}
+
+        res = vm_map_pad(&spc->uctx, va, sz, prot, 0, mobj, 0, pad_begin,
+                         pad_end, 0);
+        if (res) {
+		EMSG("vm_map_pad failed\n");
+                mobj_put(mobj);
+	}
+
+        return res;
+}
+
+/* FIXME HACK. This does not belong here. EDK2 with patchable pcd's could send
+ * a specific SVC and map the console. The use the remapped address for printing
+ * This ideally has to be defined in the platform port files and have a callback
+ * here
+ */
+/* UEFI identify mapping. Since the EDK PL01 drivers doesn't remap
+ * anything, map the address here and copy it before compiling EDK2. This will
+ * allow StMM debug messages for initial development...
+ */
+static TEE_Result alloc_nxp_io(struct stmm_ctx *spc)
+{
+	TEE_Result res;
+	vaddr_t uart_va = 0, i2c5_va = 0;
+	res = alloc_and_map_io(spc, 0x021C0000, 0x00001000,
+			TEE_MATTR_URW | TEE_MATTR_PRW,
+			&uart_va, 0, 0);
+	if (res) {
+		EMSG("failed to alloc_and_map uart");
+		return res;
+	}
+
+	/* Map I2c5 */
+	res = alloc_and_map_io(spc, 0x02040000, 0x00001000,
+			TEE_MATTR_URW | TEE_MATTR_PRW,
+			&i2c5_va, 0, 0);
+	if (res) {
+		EMSG("failed to alloc_and_map i2c5");
+		return res;
+	}
+
+	EMSG("uart va=%#"PRIxVA, uart_va);
+	EMSG("i2c5 va=%#"PRIxVA, i2c5_va);
+
+	return res;
+}
+
 static void *zalloc(void *opaque __unused, unsigned int items,
 		    unsigned int size)
 {
@@ -246,6 +307,9 @@ static TEE_Result load_stmm(struct stmm_ctx *spc)
 	 */
 	if (res)
 		return res;
+
+	res = alloc_nxp_io(spc);
+        assert (res == TEE_SUCCESS);
 
 	image_addr = sp_addr;
 	heap_addr = image_addr + uncompressed_size_roundup;
