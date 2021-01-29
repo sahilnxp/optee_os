@@ -30,8 +30,9 @@
 #define SVC_REGS_A5(_regs)	((_regs)->x5)
 #define SVC_REGS_A6(_regs)	((_regs)->x6)
 #define SVC_REGS_A7(_regs)	((_regs)->x7)
-#define __FFA_SVC_RPMB_READ		FFA_SVC_RPMB_READ
+#define __FFA_SVC_RPMB_READ			FFA_SVC_RPMB_READ
 #define __FFA_SVC_RPMB_WRITE		FFA_SVC_RPMB_WRITE
+#define __FFA_SVC_MAP_I2C_ADDR		FFA_SVC_MAP_I2C_ADDR
 #define __FFA_SVC_MEMORY_ATTRIBUTES_GET	FFA_SVC_MEMORY_ATTRIBUTES_GET_64
 #define __FFA_SVC_MEMORY_ATTRIBUTES_SET	FFA_SVC_MEMORY_ATTRIBUTES_SET_64
 #define __FFA_MSG_SEND_DIRECT_RESP	FFA_MSG_SEND_DIRECT_RESP_64
@@ -65,12 +66,14 @@ static const uint16_t stmm_id = 1U;
 static const uint16_t stmm_pta_id = 2U;
 static const uint16_t mem_mgr_id = 3U;
 static const uint16_t ffa_storage_id = 4U;
+static const uint16_t peripheral_mgr_id = 5U;
 
 static const unsigned int stmm_stack_size = 4 * SMALL_PAGE_SIZE;
 static const unsigned int stmm_heap_size = 398 * SMALL_PAGE_SIZE;
 static const unsigned int stmm_sec_buf_size = SMALL_PAGE_SIZE;
 static const unsigned int stmm_ns_comm_buf_size = SMALL_PAGE_SIZE;
 
+vaddr_t uart_va = 0, i2c5_va = 0;
 extern unsigned char stmm_image[];
 extern const unsigned int stmm_image_size;
 extern const unsigned int stmm_image_uncompressed_size;
@@ -218,7 +221,7 @@ static TEE_Result alloc_and_map_io(struct stmm_ctx *spc, paddr_t pa,
 static TEE_Result alloc_nxp_io(struct stmm_ctx *spc)
 {
 	TEE_Result res;
-	vaddr_t uart_va = 0, i2c5_va = 0;
+
 	res = alloc_and_map_io(spc, 0x021C0000, 0x00001000,
 			TEE_MATTR_URW | TEE_MATTR_PRW,
 			&uart_va, 0, 0);
@@ -870,6 +873,37 @@ static void stmm_handle_storage_service(struct thread_svc_regs *regs)
 	service_compose_direct_resp(regs, stmm_rc);
 }
 
+static void stmm_handle_peripheral_service(struct thread_svc_regs *regs)
+{
+	uint32_t action = regs->x3;
+	TEE_Result res = TEE_SUCCESS;
+	uint16_t src_id = 0;
+	uint16_t dst_id = 0;
+
+	switch (action) {
+		case __FFA_SVC_MAP_I2C_ADDR:
+
+			/* extract from request */
+			src_id = (regs->x1 >> 16) & UINT16_MAX;
+			dst_id = regs->x1 & UINT16_MAX;
+
+			/* compose message */
+			SVC_REGS_A0(regs) = __FFA_MSG_SEND_DIRECT_RESP;
+			/* swap endpoint ids */
+			SVC_REGS_A1(regs) = SHIFT_U32(dst_id, 16) | src_id;
+			SVC_REGS_A2(regs) = FFA_PARAM_MBZ;
+			SVC_REGS_A3(regs) = res;
+			SVC_REGS_A4(regs) = i2c5_va;
+			SVC_REGS_A5(regs) = 0;
+			SVC_REGS_A6(regs) = 0;
+			SVC_REGS_A7(regs) = 0;
+			break;
+		default:
+			EMSG("Undefined service id 0x%"PRIx32, action);
+			service_compose_direct_resp(regs, STMM_RET_INVALID_PARAM);
+	}
+}
+
 static void spm_eret_error(int32_t error_code, struct thread_svc_regs *regs)
 {
 	SVC_REGS_A0(regs) = FFA_ERROR;
@@ -890,6 +924,8 @@ static void spm_handle_direct_req(struct thread_svc_regs *regs)
 		stmm_handle_mem_mgr_service(regs);
 	} else if (dst_id == ffa_storage_id) {
 		stmm_handle_storage_service(regs);
+	} else if (dst_id == peripheral_mgr_id) {
+		stmm_handle_peripheral_service(regs);
 	} else {
 		EMSG("Undefined endpoint id %#"PRIx16, dst_id);
 		spm_eret_error(STMM_RET_INVALID_PARAM, regs);
@@ -920,7 +956,7 @@ static bool spm_handle_svc(struct thread_svc_regs *regs)
 		spm_handle_direct_req(regs);
 		return true;
 	default:
-		EMSG("Undefined syscall %#"PRIx32, (uint32_t)*a0);
+		DMSG("Undefined syscall %#"PRIx32, (uint32_t)*a0);
 		return_from_sp_helper(true /*panic*/, 0xabcd, regs);
 		return false;
 	}
