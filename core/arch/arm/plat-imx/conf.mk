@@ -1,5 +1,12 @@
 PLATFORM_FLAVOR ?= mx6ulevk
 
+# The default value CFG_INSECURE ?= y is assigned in mk/config.mk.
+# But mk/config.mk is included after $(platform-dir)/conf.mk from
+# core/core.mk.
+# Since we are making decision based on CFG_INSECURE in this file
+# so we need to set it early here also.
+CFG_INSECURE ?= y
+
 # Get SoC associated with the PLATFORM_FLAVOR
 mx6ul-flavorlist = \
 	mx6ulevk \
